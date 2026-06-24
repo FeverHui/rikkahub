@@ -59,8 +59,12 @@ import me.rerere.rikkahub.data.ai.tools.LocalTools
 import me.rerere.rikkahub.data.ai.tools.createConversationTools
 import me.rerere.rikkahub.data.ai.tools.createSearchTools
 import me.rerere.rikkahub.data.ai.tools.createSkillTools
+import me.rerere.rikkahub.data.ai.tools.createSubAgentCreationTool
+import me.rerere.rikkahub.data.ai.tools.createSubAgentDelegationTool
+import me.rerere.rikkahub.data.ai.tools.createSubAgentSpawnTool
 import me.rerere.rikkahub.data.ai.tools.createWorkspaceTools
 import me.rerere.rikkahub.data.files.SkillManager
+import me.rerere.rikkahub.data.ai.SubAgentManager
 import me.rerere.rikkahub.data.ai.transformers.Base64ImageToLocalFileTransformer
 import me.rerere.rikkahub.data.ai.transformers.DocumentAsPromptTransformer
 import me.rerere.rikkahub.data.ai.transformers.OcrTransformer
@@ -154,6 +158,7 @@ class ChatService(
     private val filesManager: FilesManager,
     private val skillManager: SkillManager,
     private val workspaceRepository: WorkspaceRepository,
+    private val subAgentManager: SubAgentManager,
 ) {
     // workspace 系统提示注入 (依赖 workspaceRepository, 故在类内构造)
     private val workspaceReminderTransformer = WorkspaceReminderTransformer(workspaceRepository)
@@ -601,6 +606,25 @@ class ChatService(
                             )
                         )
                     }
+
+                    // ---- 子 Agent 工具集 ----
+                    // 1. 委托给已保存的 Assistant
+                    createSubAgentDelegationTool(
+                        subAgentManager = subAgentManager,
+                        settings = settings,
+                        currentAssistant = assistant,
+                    )?.let { add(it) }
+
+                    // 2. 动态创建临时子 Agent
+                    add(createSubAgentSpawnTool(
+                        subAgentManager = subAgentManager,
+                        currentAssistant = assistant,
+                    ))
+
+                    // 3. 创建并保存 Assistant
+                    add(createSubAgentCreationTool(
+                        subAgentManager = subAgentManager,
+                    ))
                 },
             ).onCompletion {
                 // 取消 Live Update 通知

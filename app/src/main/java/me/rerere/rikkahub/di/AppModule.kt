@@ -7,6 +7,7 @@ import com.google.firebase.remoteconfig.remoteConfig
 import kotlinx.serialization.json.Json
 import me.rerere.highlight.Highlighter
 import me.rerere.rikkahub.AppScope
+import me.rerere.rikkahub.data.ai.SubAgentManager
 import me.rerere.rikkahub.data.ai.tools.LocalTools
 import me.rerere.rikkahub.data.event.AppEventBus
 import me.rerere.rikkahub.service.ChatService
@@ -67,6 +68,18 @@ val appModule = module {
     }
 
     single {
+        SubAgentManager(
+            generationHandler = get(),
+            settingsStore = get(),
+            localTools = get(),
+            mcpManager = get(),
+            workspaceRepository = get(),
+            skillManager = get(),
+            memoryRepository = get(),
+        )
+    }
+
+    single {
         ChatService(
             context = get(),
             appScope = get(),
@@ -80,7 +93,8 @@ val appModule = module {
             mcpManager = get(),
             filesManager = get(),
             skillManager = get(),
-            workspaceRepository = get()
+            workspaceRepository = get(),
+            subAgentManager = get(),
         )
     }
 

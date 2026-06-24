@@ -46,6 +46,10 @@ data class Assistant(
     val enableTimeReminder: Boolean = false,            // 时间间隔提醒注入
     val allowConversationSystemPrompt: Boolean = false, // 允许对话单独重写 system prompt
     val allowConversationPromptInjection: Boolean = false, // 允许对话单独绑定提示词注入
+
+    // ---- 子 Agent 配置 ----
+    val subAgentIds: Set<Uuid> = emptySet(),              // 允许作为子 Agent 使用的 Assistant ID 列表
+    val allowDynamicDelegation: Boolean = false,           // 允许动态委托给任意已保存的 Assistant（跳过白名单）
 )
 
 @Serializable
