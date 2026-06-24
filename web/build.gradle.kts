@@ -10,7 +10,10 @@ val buildWebUi = tasks.register<Exec>("buildWebUi") {
     description = "Build web-ui and copy its static output into the web module resources."
 
     workingDir = webUiDir.asFile
-    commandLine("zsh", "-ic", "pnpm run build")
+    // 改为使用 bash，移除交互式参数
+    commandLine("bash", "-c", "pnpm run build")
+    // 或者直接使用 sh
+    // commandLine("sh", "-c", "pnpm run build")
 
     inputs.files(
         webUiDir.file("package.json"),
