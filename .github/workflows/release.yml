@@ -37,10 +37,14 @@ jobs:
           # 写入Google Services配置
           echo '${{ secrets.GOOGLE_SERVICES_JSON }}' > app/google-services.json
 
+      # 👇 添加这一行来安装 zsh
+      - name: Install zsh
+        run: sudo apt-get update && sudo apt-get install -y zsh
+
       - name: Gradle Build
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease
+          ./gradlew assembleRelease --stacktrace
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
