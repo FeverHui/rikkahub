@@ -1,0 +1,162 @@
+name: Release Build (Auto-Signed)
+
+on:
+  workflow_dispatch:        # 手动触发
+  push:
+    tags: [ "v*" ]         # 推送 tag 时自动触发 (如 v2.3.3)
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          submodules: recursive
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            ~/.android/cache
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties', '**/libs.versions.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Create placeholder google-services.json
+        run: |
+          cat > app/google-services.json << 'EOF'
+          {
+            "project_info": {
+              "project_number": "000000000000",
+              "project_id": "rikkahub-ci-build",
+              "storage_bucket": "rikkahub-ci-build.appspot.com"
+            },
+            "client": [
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:000000000000:android:0000000000000000",
+                  "android_client_info": {
+                    "package_name": "me.rerere.rikkahub"
+                  }
+                },
+                "oauth_client": [],
+                "api_key": [{
+                  "current_key": "CI_BUILD_PLACEHOLDER_API_KEY"
+                }],
+                "services": {
+                  "analytics_service": { "status": 2 },
+                  "appinvite_service": { "status": 2 },
+                  "ads_service": { "status": 2 }
+                }
+              }
+            ],
+            "configuration_version": "1"
+          }
+          EOF
+          echo "✅ Placeholder google-services.json created"
+
+      - name: Generate signging keystore
+        run: |
+          # 生成一个临时 keystore 用于签名
+          keytool -genkey -v \
+            -keystore ${{ github.workspace }}/release.keystore \
+            -alias release \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass android \
+            -keypass android \
+            -dname "CN=RikkaHub CI, OU=CI, O=RikkaHub, L=Unknown, ST=Unknown, C=UN"
+          echo "✅ Temporary keystore created"
+
+      - name: Configure signing in local.properties
+        run: |
+          cat >> local.properties << 'EOF'
+          
+          # CI build signing config
+          storeFile=${{ github.workspace }}/release.keystore
+          storePassword=android
+          keyAlias=release
+          keyPassword=android
+          EOF
+          echo "✅ Signing configured in local.properties"
+
+      - name: Build Release APK & AAB
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease bundleRelease \
+            --build-cache \
+            --parallel \
+            --no-daemon
+        env:
+          CI: true
+
+      - name: List outputs
+        run: |
+          echo "=== APK ==="
+          find app/build/outputs/apk -name "*.apk" -exec ls -lh {} \;
+          echo "=== AAB ==="
+          find app/build/outputs/bundle -name "*.aab" -exec ls -lh {} \;
+
+      - name: Upload Release APK (arm64-v8a)
+        uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: rikkahub-release-arm64
+          path: app/build/outputs/apk/release/*arm64*-release.apk
+          compression-level: 0
+          if-no-files-found: warn
+
+      - name: Upload Release APK (universal)
+        uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: rikkahub-release-universal
+          path: app/build/outputs/apk/release/*universal*.apk
+          compression-level: 0
+          if-no-files-found: warn
+
+      - name: Upload Release AAB
+        uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: rikkahub-release-aab
+          path: app/build/outputs/bundle/release/*.aab
+          compression-level: 0
+          if-no-files-found: warn
+
+      - name: Upload ProGuard mapping
+        uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: proguard-mapping
+          path: app/build/outputs/mapping/release/
+          retention-days: 30
+
+      - name: Upload Build Reports (if failed)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-reports
+          path: |
+            app/build/reports/
+            build/reports/
+          retention-days: 7
